@@ -75,10 +75,23 @@ async function startServer() {
   // Vite middleware for development
   console.log("NODE_ENV:", process.env.NODE_ENV);
   if (process.env.NODE_ENV !== "production") {
-    console.log("Démarrage de Vite en mode middleware...");
+    console.log("Démarrage de Vite en mode middleware (config inline)...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
+      configFile: false, // Désactive le chargement du fichier vite.config.ts
+      plugins: [
+        (await import('@vitejs/plugin-react')).default(),
+        (await import('@tailwindcss/vite')).default(),
+      ],
+      define: {
+        'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY),
+      },
+      resolve: {
+        alias: {
+          '@': path.resolve(process.cwd(), '.'),
+        },
+      },
     });
     app.use(vite.middlewares);
   } else {
