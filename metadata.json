@@ -1,0 +1,5 @@
+{
+  "name": "TaskMaster SQL",
+  "description": "Une application de gestion de tâches robuste utilisant Node.js et une base de données SQL.",
+  "requestFramePermissions": []
+}
