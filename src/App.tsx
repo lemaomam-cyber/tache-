@@ -11,12 +11,17 @@ import type { Task } from "./types";
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchTasks();
-  }, []);
+    if (searchQuery.trim()) {
+      searchTasks(searchQuery);
+    } else {
+      fetchTasks();
+    }
+  }, [searchQuery]);
 
   const fetchTasks = async () => {
     try {
@@ -27,6 +32,21 @@ export default function App() {
       setTasks(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur est survenue");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const searchTasks = async (query: string) => {
+    try {
+      setLoading(true);
+      // Appel à l'endpoint vulnérable
+      const response = await fetch(`/api/tasks/search?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
+      setTasks(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur de recherche");
     } finally {
       setLoading(false);
     }
@@ -95,21 +115,36 @@ export default function App() {
         </header>
 
         <form onSubmit={addTask} className="mb-10">
-          <div className="relative group">
-            <input
-              type="text"
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              placeholder="Ajouter une nouvelle tâche..."
-              className="w-full pl-5 pr-14 py-4 bg-white border border-neutral-200 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-neutral-400"
-            />
-            <button
-              type="submit"
-              disabled={!newTaskTitle.trim()}
-              className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors shadow-sm"
-            >
-              <Plus size={24} />
-            </button>
+          <div className="flex flex-col gap-4">
+            <div className="relative group">
+              <input
+                type="text"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                placeholder="Ajouter une nouvelle tâche..."
+                className="w-full pl-5 pr-14 py-4 bg-white border border-neutral-200 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-neutral-400"
+              />
+              <button
+                type="submit"
+                disabled={!newTaskTitle.trim()}
+                className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors shadow-sm"
+              >
+                <Plus size={24} />
+              </button>
+            </div>
+            
+            <div className="relative group">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Rechercher (Endpoint VULNÉRABLE SQL)..."
+                className="w-full px-5 py-3 bg-red-50 border border-red-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all placeholder:text-red-300 text-red-900"
+              />
+              <div className="absolute right-4 top-3 text-red-300 italic text-xs pointer-events-none">
+                Labo SQL Injection
+              </div>
+            </div>
           </div>
         </form>
 

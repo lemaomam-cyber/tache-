@@ -48,6 +48,23 @@ async function startServer() {
 
   // --- API ROUTES ---
   
+  // ROUTE VULNÉRABLE À L'INJECTION SQL (Pour démonstration pédagogique)
+  app.get("/api/tasks/search", (req, res) => {
+    const queryParam = req.query.q || "";
+    // DANGER : Concaténation directe de la saisie utilisateur dans la requête
+    const sql = "SELECT * FROM tasks WHERE title LIKE '%" + queryParam + "%'";
+    
+    console.log("Exécution de la requête SQL vulnérable :", sql);
+    
+    db.all(sql, [], (err, rows) => {
+      if (err) {
+        console.error("Erreur SQL :", err.message);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows);
+    });
+  });
+
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", database: "sqlite3" });
   });
