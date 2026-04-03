@@ -48,20 +48,22 @@ async function startServer() {
 
   // --- API ROUTES ---
   
-  // ROUTE VULNÉRABLE À L'INJECTION SQL (Pour démonstration pédagogique)
+  // ROUTE EXTRÊMEMENT VULNÉRABLE (Utilise db.exec pour permettre les Stacked Queries)
   app.get("/api/tasks/search", (req, res) => {
     const queryParam = req.query.q || "";
-    // DANGER : Concaténation directe de la saisie utilisateur dans la requête
     const sql = "SELECT * FROM tasks WHERE title LIKE '%" + queryParam + "%'";
     
-    console.log("Exécution de la requête SQL vulnérable :", sql);
+    console.log("!!! EXÉCUTION VIA DB.EXEC (Stacked Queries autorisées) !!!");
+    console.log("SQL :", sql);
     
-    db.all(sql, [], (err, rows) => {
+    // db.exec exécute TOUT le contenu de la chaîne, même s'il y a plusieurs commandes
+    db.exec(sql, (err) => {
       if (err) {
         console.error("Erreur SQL :", err.message);
         return res.status(500).json({ error: err.message });
       }
-      res.json(rows);
+      // Note : db.exec ne renvoie pas de lignes de résultat pour les SELECT
+      res.json([]); 
     });
   });
 
