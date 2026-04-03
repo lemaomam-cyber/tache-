@@ -4,9 +4,13 @@
  */
 
 import { useState, useEffect, FormEvent } from "react";
-import { Plus, CheckCircle2, Circle, Trash2, ListTodo, Loader2 } from "lucide-react";
+import { Plus, CheckCircle2, Circle, Trash2, ListTodo, Loader2, Wifi, WifiOff } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { io, Socket } from "socket.io-client";
 import type { Task } from "./types";
+
+// Initialisation du socket (se connecte au même hôte par défaut)
+const socket: Socket = io();
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -14,13 +18,48 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(socket.connected);
 
   useEffect(() => {
+    // Gestion de la connexion socket
+    function onConnect() { setIsConnected(true); }
+    function onDisconnect() { setIsConnected(false); }
+
+    // Événements temps réel
+    function onTaskCreated(newTask: Task) {
+      setTasks(prev => {
+        if (prev.some(t => t.id === newTask.id)) return prev;
+        return [newTask, ...prev];
+      });
+    }
+
+    function onTaskUpdated({ id, completed }: { id: number, completed: boolean }) {
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, completed } : t));
+    }
+
+    function onTaskDeleted({ id }: { id: number }) {
+      setTasks(prev => prev.filter(t => t.id !== id));
+    }
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("task:created", onTaskCreated);
+    socket.on("task:updated", onTaskUpdated);
+    socket.on("task:deleted", onTaskDeleted);
+
     if (searchQuery.trim()) {
       searchTasks(searchQuery);
     } else {
       fetchTasks();
     }
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("task:created", onTaskCreated);
+      socket.off("task:updated", onTaskUpdated);
+      socket.off("task:deleted", onTaskDeleted);
+    };
   }, [searchQuery]);
 
   const fetchTasks = async () => {
@@ -109,7 +148,18 @@ export default function App() {
           <h1 className="text-4xl font-bold tracking-tight text-neutral-900 mb-2">
             Mes Tâches
           </h1>
-          <p className="text-neutral-500">
+          <div className="flex items-center justify-center gap-2 text-xs font-medium">
+            {isConnected ? (
+              <span className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                <Wifi size={12} /> Connecté (Temps Réel)
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-red-600 bg-red-50 px-2 py-1 rounded-full">
+                <WifiOff size={12} /> Déconnecté
+              </span>
+            )}
+          </div>
+          <p className="text-neutral-500 mt-2">
             Gérez votre productivité simplement et efficacement.
           </p>
         </header>

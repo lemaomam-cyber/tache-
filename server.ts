@@ -3,6 +3,8 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import sqlite3 from "sqlite3";
 import cors from "cors";
+import { createServer } from "http";
+import { Server } from "socket.io";
 
 process.on("uncaughtException", (err) => {
   console.error("!!! EXCEPTION NON GÉRÉE !!!", err);
@@ -12,10 +14,17 @@ process.on("unhandledRejection", (reason, promise) => {
   console.error("!!! REJET NON GÉRÉ !!! à :", promise, "raison :", reason);
 });
 
-console.log("--- DÉMARRAGE DU SERVEUR (Version sqlite3 standard) ---");
+console.log("--- DÉMARRAGE DU SERVEUR (Version Real-Time) ---");
 
 async function startServer() {
   const app = express();
+  const httpServer = createServer(app);
+  const io = new Server(httpServer, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"]
+    }
+  });
   const PORT = 3000;
 
   console.log("Tentative d'ouverture de la base de données database.sqlite...");
@@ -46,6 +55,14 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
+  // --- SOCKET.IO ---
+  io.on("connection", (socket) => {
+    console.log("Nouvel utilisateur connecté :", socket.id);
+    socket.on("disconnect", () => {
+      console.log("Utilisateur déconnecté :", socket.id);
+    });
+  });
+
   // --- API ROUTES ---
   
   // ROUTE EXTRÊMEMENT VULNÉRABLE (Utilise db.exec pour permettre les Stacked Queries)
@@ -56,19 +73,17 @@ async function startServer() {
     console.log("!!! EXÉCUTION VIA DB.EXEC (Stacked Queries autorisées) !!!");
     console.log("SQL :", sql);
     
-    // db.exec exécute TOUT le contenu de la chaîne, même s'il y a plusieurs commandes
     db.exec(sql, (err) => {
       if (err) {
         console.error("Erreur SQL :", err.message);
         return res.status(500).json({ error: err.message });
       }
-      // Note : db.exec ne renvoie pas de lignes de résultat pour les SELECT
       res.json([]); 
     });
   });
 
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", database: "sqlite3" });
+    res.json({ status: "ok", database: "sqlite3", realtime: "socket.io" });
   });
 
   app.get("/api/tasks", (req, res) => {
@@ -90,7 +105,9 @@ async function startServer() {
         console.error("Erreur POST /api/tasks:", err.message);
         return res.status(500).json({ error: "Erreur serveur" });
       }
-      res.json({ id: this.lastID, title, completed: false });
+      const newTask = { id: this.lastID, title, completed: false };
+      io.emit("task:created", newTask); // Diffusion temps réel
+      res.json(newTask);
     });
   });
 
@@ -103,6 +120,7 @@ async function startServer() {
         console.error("Erreur PATCH /api/tasks:", err.message);
         return res.status(500).json({ error: "Erreur serveur" });
       }
+      io.emit("task:updated", { id: Number(id), completed: !!completed }); // Diffusion temps réel
       res.json({ success: true, changes: this.changes });
     });
   });
@@ -115,6 +133,7 @@ async function startServer() {
         console.error("Erreur DELETE /api/tasks:", err.message);
         return res.status(500).json({ error: "Erreur serveur" });
       }
+      io.emit("task:deleted", { id: Number(id) }); // Diffusion temps réel
       res.json({ success: true, changes: this.changes });
     });
   });
@@ -139,14 +158,12 @@ async function startServer() {
     app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`>>> SERVEUR PRÊT SUR http://localhost:${PORT} <<<`);
   });
 
   // Keep-alive robuste
-  const keepAlive = setInterval(() => {
-    // console.log("Pulse...");
-  }, 1000 * 60);
+  const keepAlive = setInterval(() => {}, 1000 * 60);
   
   process.on('SIGINT', () => {
     db.close();
